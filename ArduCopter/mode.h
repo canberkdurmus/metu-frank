@@ -1382,6 +1382,8 @@ public:
 
     void restart_without_terrain();
 
+    uint32_t start_time_ms;
+
 protected:
 
     const char *name() const override { return "RTL"; }
@@ -1439,7 +1441,7 @@ private:
     Vector3f mission_wp[13];
     int mission_index = 0;
     bool mission_completed = false;
-    uint32_t start_time_ms;
+
     // Loiter timer - Records how long we have been in loiter
     uint32_t _loiter_start_time;
 
