@@ -454,20 +454,19 @@ void ModeFrank::build_path() {
     rtl_path.climb_target = Location(forward, rtl_path.origin_point.lng, climb_altitude,
                                      rtl_path.return_target.get_alt_frame());
 
-    mission_wp[0] = Vector3f(0,0,200);
-    mission_wp[1] = Vector3f(500,0,200);
-    mission_wp[2] = Vector3f(0,0,700);
-    mission_wp[3] = Vector3f(0,0,200);
+    mission_wp[0] = Vector3f(500,0,200);
+    mission_wp[1] = Vector3f(0,0,700);
+    mission_wp[2] = Vector3f(0,0,200);
+    mission_wp[3] = Vector3f(223,0,277);
     mission_wp[4] = Vector3f(300,0,500);
-    mission_wp[5] = Vector3f(0,0,800);
-    mission_wp[6] = Vector3f(-300,0,500);
-    mission_wp[7] = Vector3f(0,0,200);
-    mission_wp[8] = Vector3f(0,0,200);
-    mission_wp[9] = Vector3f(0,0,200);
+    mission_wp[5] = Vector3f(223,0,723);
+    mission_wp[6] = Vector3f(0,0,800);
+    mission_wp[7] = Vector3f(-223,0,723);
+    mission_wp[8] = Vector3f(-300,0,500);
+    mission_wp[9] = Vector3f(-223,0,277);
     mission_wp[10] = Vector3f(0,0,200);
     mission_wp[11] = Vector3f(0,0,200);
     mission_wp[12] = Vector3f(0,0,200);
-    mission_wp[13] = Vector3f(0,0,200);
     
 
 
