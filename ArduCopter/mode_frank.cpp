@@ -21,6 +21,7 @@ bool ModeFrank::init(bool ignore_checks) {
     _state = Frank_Starting;
     _state_complete = true; // see run() method below
     terrain_following_allowed = !copter.failsafe.terrain;
+    start_time_ms = AP_HAL::millis();
     return true;
 }
 
@@ -38,10 +39,11 @@ void ModeFrank::restart_without_terrain() {
 // rtl_run - runs the return-to-launch controller
 // should be called at 100hz or more
 void ModeFrank::run(bool disarm_on_land) {
+
+    
     if (!motors->armed()) {
         return;
     }
-
     // check if we need to move to next state
     if (_state_complete) {
         switch (_state) {
@@ -89,6 +91,7 @@ void ModeFrank::run(bool disarm_on_land) {
 
         case Frank_LoiterAtHome:
             loiterathome_run();
+            
             break;
 
         case Frank_FinalDescent:
@@ -106,7 +109,7 @@ void ModeFrank::run(bool disarm_on_land) {
 void ModeFrank::climb_start() {
     _state = Frank_InitialClimb;
     _state_complete = false;
-
+    
     // RTL_SPEED == 0 means use WPNAV_SPEED
     if (g.rtl_speed_cms != 0) {
         wp_nav->set_speed_xy(g.rtl_speed_cms);
@@ -131,7 +134,7 @@ void ModeFrank::climb_start() {
 void ModeFrank::return_start() {
     _state = Frank_ReturnHome;
     _state_complete = false;
-
+    
     // if (!wp_nav->set_wp_destination(rtl_path.return_target)) {
     if (!wp_nav->set_wp_destination(mission_wp[12])) {
         // failure must be caused by missing terrain data, restart RTL
@@ -151,7 +154,9 @@ void ModeFrank::climb_return_run() {
         make_safe_spool_down();
         return;
     }
-
+    /*auto_yaw.set_mode(AUTO_YAW_RATE);
+    auto_yaw.set_rate(360);
+    attitude_control->input_euler_angle_roll_pitch_euler_rate_yaw(wp_nav->get_roll(), wp_nav->get_pitch(), 3600);*/
     // process pilot's yaw input
     float target_yaw_rate = 0;
     if (!copter.failsafe.radio) {
@@ -188,8 +193,21 @@ void ModeFrank::climb_return_run() {
         wp_nav->set_wp_destination(mission_wp[mission_index]);
         hal.console->printf("Mission Index: %d\n", mission_index);
 
-    } else if (mission_index == 13 && wp_nav->reached_wp_destination()) {
+    } else if (mission_index >= 13 && wp_nav->reached_wp_destination()) {
+        // if time reached mission_completed = true
+        // else time not reached => continue turning
         mission_completed = true;
+        
+        if(millis() - start_time_ms > 240000 ){
+            mission_completed = true;
+        }
+        else{
+            hal.console->printf("spinning, time is %d\n", millis() - start_time_ms );
+            auto_yaw.set_mode(AUTO_YAW_RATE);
+            auto_yaw.set_rate(360);
+            attitude_control->input_euler_angle_roll_pitch_euler_rate_yaw(wp_nav->get_roll(), wp_nav->get_pitch(), 3600);
+        }
+        
     }
 
     // check if we've completed this stage of RTL
@@ -202,6 +220,7 @@ void ModeFrank::loiterathome_start() {
     _state_complete = false;
     _loiter_start_time = millis();
 
+    
     // yaw back to initial take-off heading yaw unless pilot has already overridden yaw
     if (auto_yaw.default_mode(true) != AUTO_YAW_HOLD) {
         auto_yaw.set_mode(AUTO_YAW_RESETTOARMEDYAW);
@@ -214,11 +233,16 @@ void ModeFrank::loiterathome_start() {
 //      called by rtl_run at 100hz or more
 void ModeFrank::loiterathome_run() {
     // if not armed set throttle to zero and exit immediately
+    
     if (is_disarmed_or_landed()) {
         make_safe_spool_down();
         return;
     }
 
+    /*auto_yaw.set_mode(AUTO_YAW_RATE);
+    auto_yaw.set_rate(360);
+    attitude_control->input_euler_angle_roll_pitch_euler_rate_yaw(wp_nav->get_roll(), wp_nav->get_pitch(), 3600);
+    */
     // process pilot's yaw input
     float target_yaw_rate = 0;
     if (!copter.failsafe.radio) {
@@ -290,7 +314,10 @@ void ModeFrank::descent_run() {
         make_safe_spool_down();
         return;
     }
-
+    /*auto_yaw.set_mode(AUTO_YAW_RATE);
+    auto_yaw.set_rate(360);
+    attitude_control->input_euler_angle_roll_pitch_euler_rate_yaw(wp_nav->get_roll(), wp_nav->get_pitch(), 3600);
+    */
     // process pilot's input
     if (!copter.failsafe.radio) {
         if ((g.throttle_behavior & THR_BEHAVE_HIGH_THROTTLE_CANCELS_LAND) != 0 &&
@@ -348,7 +375,7 @@ void ModeFrank::descent_run() {
 void ModeFrank::land_start() {
     _state = Frank_Land;
     _state_complete = false;
-
+    
     // Set wp navigation target to above home
     loiter_nav->init_target(wp_nav->get_wp_destination());
 
@@ -388,7 +415,10 @@ void ModeFrank::land_run(bool disarm_on_land) {
     if (copter.ap.land_complete && motors->get_spool_state() == AP_Motors::SpoolState::GROUND_IDLE) {
         copter.arming.disarm();
     }
-
+    /*auto_yaw.set_mode(AUTO_YAW_RATE);
+    auto_yaw.set_rate(360);
+    attitude_control->input_euler_angle_roll_pitch_euler_rate_yaw(wp_nav->get_roll(), wp_nav->get_pitch(), 3600);
+    */
     // if not armed set throttle to zero and exit immediately
     if (is_disarmed_or_landed()) {
         make_safe_spool_down();
@@ -415,21 +445,32 @@ void ModeFrank::build_path() {
     // compute return target
     compute_return_target();
 
+    //auto_yaw.yaw;
+    // 5 meters forward
+    float forward_const = 5 * 90.0000900001; // which equals 5/111111* 10000000;
+    int32_t climb_altitude = 200;
+    int32_t forward = int32_t(forward_const) + rtl_path.origin_point.lat;
+
+    rtl_path.climb_target = Location(forward, rtl_path.origin_point.lng, climb_altitude,
+                                     rtl_path.return_target.get_alt_frame());
+
     mission_wp[0] = Vector3f(500,0,200);
     mission_wp[1] = Vector3f(0,0,700);
     mission_wp[2] = Vector3f(0,0,200);
-    mission_wp[3] = Vector3f(300,0,500);
-    mission_wp[4] = Vector3f(0,0,800);
-    mission_wp[5] = Vector3f(-300,0,500);
-    mission_wp[6] = Vector3f(0,0,200);
-    mission_wp[7] = Vector3f(0,0,200);
-    mission_wp[8] = Vector3f(0,0,200);
-    mission_wp[9] = Vector3f(0,0,200);
+    mission_wp[3] = Vector3f(223,0,277);
+    mission_wp[4] = Vector3f(300,0,500);
+    mission_wp[5] = Vector3f(223,0,723);
+    mission_wp[6] = Vector3f(0,0,800);
+    mission_wp[7] = Vector3f(-223,0,723);
+    mission_wp[8] = Vector3f(-300,0,500);
+    mission_wp[9] = Vector3f(-223,0,277);
     mission_wp[10] = Vector3f(0,0,200);
     mission_wp[11] = Vector3f(0,0,200);
     mission_wp[12] = Vector3f(0,0,200);
+    
 
-    // descent target is below return target at rtl_alt_final
+
+            // descent target is below return target at rtl_alt_final
     rtl_path.descent_target = Location(rtl_path.return_target.lat, rtl_path.return_target.lng, 700,
                                        Location::AltFrame::ABOVE_HOME);
 

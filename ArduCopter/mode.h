@@ -1439,7 +1439,7 @@ private:
     Vector3f mission_wp[13];
     int mission_index = 0;
     bool mission_completed = false;
-
+    uint32_t start_time_ms;
     // Loiter timer - Records how long we have been in loiter
     uint32_t _loiter_start_time;
 
