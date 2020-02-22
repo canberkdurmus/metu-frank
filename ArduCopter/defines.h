@@ -121,6 +121,16 @@ enum RTLState {
     RTL_Land
 };
 
+// Frank states
+enum FrankState {
+    Frank_Starting,
+    Frank_InitialClimb,
+    Frank_ReturnHome,
+    Frank_LoiterAtHome,
+    Frank_FinalDescent,
+    Frank_Land
+};
+
 // Safe RTL states
 enum SmartRTLState {
     SmartRTL_WaitForPathCleanup,

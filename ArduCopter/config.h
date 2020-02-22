@@ -342,6 +342,12 @@
 #endif
 
 //////////////////////////////////////////////////////////////////////////////
+// RTL - Return To Launch
+#ifndef MODE_FRANK_ENABLED
+# define MODE_FRANK_ENABLED ENABLED
+#endif
+
+//////////////////////////////////////////////////////////////////////////////
 // SmartRTL - allows vehicle to retrace a (loop-eliminated) breadcrumb home
 #ifndef MODE_SMARTRTL_ENABLED
 # define MODE_SMARTRTL_ENABLED ENABLED
@@ -410,7 +416,7 @@
 //
 
 #ifndef FLIGHT_MODE_1
- # define FLIGHT_MODE_1                  Mode::Number::STABILIZE
+ # define FLIGHT_MODE_1                  Mode::Number::FRANK
 #endif
 #ifndef FLIGHT_MODE_2
  # define FLIGHT_MODE_2                  Mode::Number::STABILIZE

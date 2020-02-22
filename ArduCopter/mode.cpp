@@ -81,6 +81,12 @@ Mode *Copter::mode_from_mode_num(const Mode::Number mode)
             break;
 #endif
 
+#if MODE_FRANK_ENABLED == ENABLED
+        case Mode::Number::FRANK:
+            ret = &mode_frank;
+            break;
+#endif
+
 #if MODE_DRIFT_ENABLED == ENABLED
         case Mode::Number::DRIFT:
             ret = &mode_drift;

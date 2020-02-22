@@ -1,6 +1,6 @@
 #include "Copter.h"
 
-#if MODE_RTL_ENABLED == ENABLED
+#if MODE_FRANK_ENABLED == ENABLED
 
 /*
  * Init and run calls for RTL flight mode
@@ -10,7 +10,7 @@
  */
 
 // rtl_init - initialise rtl controller
-bool ModeRTL::init(bool ignore_checks) {
+bool ModeFrank::init(bool ignore_checks) {
     if (!ignore_checks) {
         if (!AP::ahrs().home_is_set()) {
             return false;
@@ -18,18 +18,18 @@ bool ModeRTL::init(bool ignore_checks) {
     }
     // initialise waypoint and spline controller
     wp_nav->wp_and_spline_init();
-    _state = RTL_Starting;
+    _state = Frank_Starting;
     _state_complete = true; // see run() method below
     terrain_following_allowed = !copter.failsafe.terrain;
     return true;
 }
 
 // re-start RTL with terrain following disabled
-void ModeRTL::restart_without_terrain() {
+void ModeFrank::restart_without_terrain() {
     AP::logger().Write_Error(LogErrorSubsystem::NAVIGATION, LogErrorCode::RESTARTED_RTL);
     if (rtl_path.terrain_used) {
         terrain_following_allowed = false;
-        _state = RTL_Starting;
+        _state = Frank_Starting;
         _state_complete = true;
         gcs().send_text(MAV_SEVERITY_CRITICAL, "Restarting RTL - Terrain data missing");
     }
@@ -37,7 +37,7 @@ void ModeRTL::restart_without_terrain() {
 
 // rtl_run - runs the return-to-launch controller
 // should be called at 100hz or more
-void ModeRTL::run(bool disarm_on_land) {
+void ModeFrank::run(bool disarm_on_land) {
     if (!motors->armed()) {
         return;
     }
@@ -45,27 +45,27 @@ void ModeRTL::run(bool disarm_on_land) {
     // check if we need to move to next state
     if (_state_complete) {
         switch (_state) {
-            case RTL_Starting:
+            case Frank_Starting:
                 build_path();
                 climb_start();
                 break;
-            case RTL_InitialClimb:
+            case Frank_InitialClimb:
                 return_start();
                 break;
-            case RTL_ReturnHome:
+            case Frank_ReturnHome:
                 loiterathome_start();
                 break;
-            case RTL_LoiterAtHome:
+            case Frank_LoiterAtHome:
                 if (rtl_path.land || copter.failsafe.radio) {
                     land_start();
                 } else {
                     descent_start();
                 }
                 break;
-            case RTL_FinalDescent:
+            case Frank_FinalDescent:
                 // do nothing
                 break;
-            case RTL_Land:
+            case Frank_Land:
                 // do nothing - rtl_land_run will take care of disarming motors
                 break;
         }
@@ -74,36 +74,37 @@ void ModeRTL::run(bool disarm_on_land) {
     // call the correct run function
     switch (_state) {
 
-        case RTL_Starting:
+        case Frank_Starting:
             // should not be reached:
-            _state = RTL_InitialClimb;
+            _state = Frank_InitialClimb;
             FALLTHROUGH;
 
-        case RTL_InitialClimb:
+        case Frank_InitialClimb:
             climb_return_run();
             break;
 
-        case RTL_ReturnHome:
+        case Frank_ReturnHome:
             climb_return_run();
             break;
 
-        case RTL_LoiterAtHome:
+        case Frank_LoiterAtHome:
             loiterathome_run();
             break;
 
-        case RTL_FinalDescent:
+        case Frank_FinalDescent:
             descent_run();
             break;
 
-        case RTL_Land:
+        case Frank_Land:
             land_run(disarm_on_land);
             break;
     }
 }
 
+
 // rtl_climb_start - initialise climb to RTL altitude
-void ModeRTL::climb_start() {
-    _state = RTL_InitialClimb;
+void ModeFrank::climb_start() {
+    _state = Frank_InitialClimb;
     _state_complete = false;
 
     // RTL_SPEED == 0 means use WPNAV_SPEED
@@ -112,12 +113,14 @@ void ModeRTL::climb_start() {
     }
 
     // set the destination
-    if (!wp_nav->set_wp_destination(rtl_path.climb_target)) {
+    // if (!wp_nav->set_wp_destination(rtl_path.climb_target)) {
+    if (!wp_nav->set_wp_destination(mission_wp[0])) {
         // this should not happen because rtl_build_path will have checked terrain data was available
         AP::logger().Write_Error(LogErrorSubsystem::NAVIGATION, LogErrorCode::FAILED_TO_SET_DESTINATION);
         copter.set_mode(Mode::Number::LAND, ModeReason::TERRAIN_FAILSAFE);
         return;
     }
+    mission_index = 0;
     wp_nav->set_fast_waypoint(true);
 
     // hold current yaw during initial climb
@@ -125,14 +128,16 @@ void ModeRTL::climb_start() {
 }
 
 // rtl_return_start - initialise return to home
-void ModeRTL::return_start() {
-    _state = RTL_ReturnHome;
+void ModeFrank::return_start() {
+    _state = Frank_ReturnHome;
     _state_complete = false;
 
-    if (!wp_nav->set_wp_destination(rtl_path.return_target)) {
+    // if (!wp_nav->set_wp_destination(rtl_path.return_target)) {
+    if (!wp_nav->set_wp_destination(mission_wp[12])) {
         // failure must be caused by missing terrain data, restart RTL
         restart_without_terrain();
     }
+    mission_index = 13;
 
     // initialise yaw to point home (maybe)
     auto_yaw.set_mode_to_default(true);
@@ -140,7 +145,7 @@ void ModeRTL::return_start() {
 
 // rtl_climb_return_run - implements the initial climb, return home and descent portions of RTL which all rely on the wp controller
 //      called by rtl_run at 100hz or more
-void ModeRTL::climb_return_run() {
+void ModeFrank::climb_return_run() {
     // if not armed set throttle to zero and exit immediately
     if (is_disarmed_or_landed()) {
         make_safe_spool_down();
@@ -177,13 +182,23 @@ void ModeRTL::climb_return_run() {
                                                            true);
     }
 
+
+    if (mission_index < 13 && wp_nav->reached_wp_destination()) {
+        mission_index++;
+        wp_nav->set_wp_destination(mission_wp[mission_index]);
+        hal.console->printf("Mission Index: %d\n", mission_index);
+
+    } else if (mission_index == 13 && wp_nav->reached_wp_destination()) {
+        mission_completed = true;
+    }
+
     // check if we've completed this stage of RTL
-    _state_complete = wp_nav->reached_wp_destination();
+    _state_complete = wp_nav->reached_wp_destination() && mission_completed;
 }
 
 // rtl_loiterathome_start - initialise return to home
-void ModeRTL::loiterathome_start() {
-    _state = RTL_LoiterAtHome;
+void ModeFrank::loiterathome_start() {
+    _state = Frank_LoiterAtHome;
     _state_complete = false;
     _loiter_start_time = millis();
 
@@ -197,7 +212,7 @@ void ModeRTL::loiterathome_start() {
 
 // rtl_climb_return_descent_run - implements the initial climb, return home and descent portions of RTL which all rely on the wp controller
 //      called by rtl_run at 100hz or more
-void ModeRTL::loiterathome_run() {
+void ModeFrank::loiterathome_run() {
     // if not armed set throttle to zero and exit immediately
     if (is_disarmed_or_landed()) {
         make_safe_spool_down();
@@ -249,8 +264,8 @@ void ModeRTL::loiterathome_run() {
 }
 
 // rtl_descent_start - initialise descent to final alt
-void ModeRTL::descent_start() {
-    _state = RTL_FinalDescent;
+void ModeFrank::descent_start() {
+    _state = Frank_FinalDescent;
     _state_complete = false;
 
     // Set wp navigation target to above home
@@ -265,7 +280,7 @@ void ModeRTL::descent_start() {
 
 // rtl_descent_run - implements the final descent to the RTL_ALT
 //      called by rtl_run at 100hz or more
-void ModeRTL::descent_run() {
+void ModeFrank::descent_run() {
     float target_roll = 0.0f;
     float target_pitch = 0.0f;
     float target_yaw_rate = 0.0f;
@@ -330,8 +345,8 @@ void ModeRTL::descent_run() {
 }
 
 // rtl_loiterathome_start - initialise controllers to loiter over home
-void ModeRTL::land_start() {
-    _state = RTL_Land;
+void ModeFrank::land_start() {
+    _state = Frank_Land;
     _state_complete = false;
 
     // Set wp navigation target to above home
@@ -347,15 +362,15 @@ void ModeRTL::land_start() {
     auto_yaw.set_mode(AUTO_YAW_HOLD);
 }
 
-bool ModeRTL::is_landing() const {
-    return _state == RTL_Land;
+bool ModeFrank::is_landing() const {
+    return _state == Frank_Land;
 }
 
-bool ModeRTL::landing_gear_should_be_deployed() const {
+bool ModeFrank::landing_gear_should_be_deployed() const {
     switch (_state) {
-        case RTL_LoiterAtHome:
-        case RTL_Land:
-        case RTL_FinalDescent:
+        case Frank_LoiterAtHome:
+        case Frank_Land:
+        case Frank_FinalDescent:
             return true;
         default:
             return false;
@@ -365,12 +380,12 @@ bool ModeRTL::landing_gear_should_be_deployed() const {
 
 // rtl_returnhome_run - return home
 //      called by rtl_run at 100hz or more
-void ModeRTL::land_run(bool disarm_on_land) {
+void ModeFrank::land_run(bool disarm_on_land) {
     // check if we've completed this stage of RTL
     _state_complete = copter.ap.land_complete;
 
     // disarm when the landing detector says we've landed
-    if (disarm_on_land && copter.ap.land_complete && motors->get_spool_state() == AP_Motors::SpoolState::GROUND_IDLE) {
+    if (copter.ap.land_complete && motors->get_spool_state() == AP_Motors::SpoolState::GROUND_IDLE) {
         copter.arming.disarm();
     }
 
@@ -389,7 +404,7 @@ void ModeRTL::land_run(bool disarm_on_land) {
     land_run_vertical_control();
 }
 
-void ModeRTL::build_path() {
+void ModeFrank::build_path() {
     // origin point is our stopping point
     Vector3f stopping_point;
     pos_control->get_stopping_point_xy(stopping_point);
@@ -400,22 +415,32 @@ void ModeRTL::build_path() {
     // compute return target
     compute_return_target();
 
-    // climb target is above our origin point at the return altitude
-    rtl_path.climb_target = Location(rtl_path.origin_point.lat, rtl_path.origin_point.lng, rtl_path.return_target.alt,
-                                     rtl_path.return_target.get_alt_frame());
+    mission_wp[0] = Vector3f(500,0,200);
+    mission_wp[1] = Vector3f(0,0,700);
+    mission_wp[2] = Vector3f(0,0,200);
+    mission_wp[3] = Vector3f(300,0,500);
+    mission_wp[4] = Vector3f(0,0,800);
+    mission_wp[5] = Vector3f(-300,0,500);
+    mission_wp[6] = Vector3f(0,0,200);
+    mission_wp[7] = Vector3f(0,0,200);
+    mission_wp[8] = Vector3f(0,0,200);
+    mission_wp[9] = Vector3f(0,0,200);
+    mission_wp[10] = Vector3f(0,0,200);
+    mission_wp[11] = Vector3f(0,0,200);
+    mission_wp[12] = Vector3f(0,0,200);
 
     // descent target is below return target at rtl_alt_final
-    rtl_path.descent_target = Location(rtl_path.return_target.lat, rtl_path.return_target.lng, g.rtl_alt_final,
+    rtl_path.descent_target = Location(rtl_path.return_target.lat, rtl_path.return_target.lng, 700,
                                        Location::AltFrame::ABOVE_HOME);
 
     // set land flag
     rtl_path.land = g.rtl_alt_final <= 0;
 }
 
-// compute the return target - home or rally point
+//   compute the return target - home or rally point
 //   return altitude in cm above home at which vehicle should return home
 //   return target's altitude is updated to a higher altitude that the vehicle can safely return at (frame may also be set)
-void ModeRTL::compute_return_target() {
+void ModeFrank::compute_return_target() {
     // set return target to nearest rally point or home position (Note: alt is absolute)
 #if AC_RALLY == ENABLED
     rtl_path.return_target = copter.rally.calc_best_rally_or_home_location(copter.current_loc, ahrs.get_home().alt);
@@ -488,19 +513,20 @@ void ModeRTL::compute_return_target() {
 #endif
 
     // ensure we do not descend
-    rtl_path.return_target.alt = MAX(rtl_path.return_target.alt, curr_alt);
+    // rtl_path.return_target.alt = MAX(rtl_path.return_target.alt, curr_alt);
+    rtl_path.return_target.alt = 700;
 }
 
-bool ModeRTL::get_wp(Location &destination) {
+bool ModeFrank::get_wp(Location &destination) {
     // provide target in states which use wp_nav
     switch (_state) {
-        case RTL_Starting:
-        case RTL_InitialClimb:
-        case RTL_ReturnHome:
-        case RTL_LoiterAtHome:
-        case RTL_FinalDescent:
+        case Frank_Starting:
+        case Frank_InitialClimb:
+        case Frank_ReturnHome:
+        case Frank_LoiterAtHome:
+        case Frank_FinalDescent:
             return wp_nav->get_oa_wp_destination(destination);
-        case RTL_Land:
+        case Frank_Land:
             return false;
     }
 
@@ -508,11 +534,11 @@ bool ModeRTL::get_wp(Location &destination) {
     return false;
 }
 
-uint32_t ModeRTL::wp_distance() const {
+uint32_t ModeFrank::wp_distance() const {
     return wp_nav->get_wp_distance_to_destination();
 }
 
-int32_t ModeRTL::wp_bearing() const {
+int32_t ModeFrank::wp_bearing() const {
     return wp_nav->get_wp_bearing_to_destination();
 }
 

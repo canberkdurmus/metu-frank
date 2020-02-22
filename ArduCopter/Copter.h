@@ -228,6 +228,7 @@ public:
     friend class ModeLoiter;
     friend class ModePosHold;
     friend class ModeRTL;
+    friend class ModeFrank;
     friend class ModeSmartRTL;
     friend class ModeSport;
     friend class ModeStabilize;
@@ -963,6 +964,9 @@ private:
 #endif
 #if MODE_RTL_ENABLED == ENABLED
     ModeRTL mode_rtl;
+#endif
+#if MODE_FRANK_ENABLED == ENABLED
+    ModeFrank mode_frank;
 #endif
 #if FRAME_CONFIG == HELI_FRAME
     ModeStabilize_Heli mode_stabilize;
