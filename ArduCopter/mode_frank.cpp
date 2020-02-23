@@ -127,7 +127,11 @@ void ModeFrank::climb_start() {
     wp_nav->set_fast_waypoint(true);
 
     // hold current yaw during initial climb
-    auto_yaw.set_mode(AUTO_YAW_HOLD);
+    // auto_yaw.set_mode(AUTO_YAW_HOLD);
+
+    auto_yaw.set_mode(AUTO_YAW_RATE);
+    auto_yaw.set_rate(3600);
+    attitude_control->input_euler_angle_roll_pitch_euler_rate_yaw(wp_nav->get_roll(), wp_nav->get_pitch(), 360);
 }
 
 // rtl_return_start - initialise return to home
@@ -143,7 +147,10 @@ void ModeFrank::return_start() {
     mission_index = 13;
 
     // initialise yaw to point home (maybe)
-    auto_yaw.set_mode_to_default(true);
+    //auto_yaw.set_mode_to_default(true);
+    auto_yaw.set_mode(AUTO_YAW_RATE);
+    auto_yaw.set_rate(3600);
+    attitude_control->input_euler_angle_roll_pitch_euler_rate_yaw(wp_nav->get_roll(), wp_nav->get_pitch(), 360);
 }
 
 // rtl_climb_return_run - implements the initial climb, return home and descent portions of RTL which all rely on the wp controller
@@ -154,9 +161,9 @@ void ModeFrank::climb_return_run() {
         make_safe_spool_down();
         return;
     }
-    /*auto_yaw.set_mode(AUTO_YAW_RATE);
+    auto_yaw.set_mode(AUTO_YAW_RATE);
     auto_yaw.set_rate(360);
-    attitude_control->input_euler_angle_roll_pitch_euler_rate_yaw(wp_nav->get_roll(), wp_nav->get_pitch(), 3600);*/
+    attitude_control->input_euler_angle_roll_pitch_euler_rate_yaw(wp_nav->get_roll(), wp_nav->get_pitch(), 3600);
     // process pilot's yaw input
     float target_yaw_rate = 0;
     if (!copter.failsafe.radio) {
@@ -196,16 +203,16 @@ void ModeFrank::climb_return_run() {
     } else if (mission_index >= 13 && wp_nav->reached_wp_destination()) {
         // if time reached mission_completed = true
         // else time not reached => continue turning
-        mission_completed = true;
+       // mission_completed = true;
         
-        if(millis() - start_time_ms > 240000 ){
+        if(millis() - start_time_ms > 180000 ){
             mission_completed = true;
         }
         else{
             hal.console->printf("spinning, time is %d\n", millis() - start_time_ms );
-            auto_yaw.set_mode(AUTO_YAW_RATE);
-            auto_yaw.set_rate(360);
-            attitude_control->input_euler_angle_roll_pitch_euler_rate_yaw(wp_nav->get_roll(), wp_nav->get_pitch(), 3600);
+            // auto_yaw.set_mode(AUTO_YAW_RATE);
+            // auto_yaw.set_rate(3600);
+            // attitude_control->input_euler_angle_roll_pitch_euler_rate_yaw(wp_nav->get_roll(), wp_nav->get_pitch(), 3600);
         }
         
     }
@@ -222,11 +229,11 @@ void ModeFrank::loiterathome_start() {
 
     
     // yaw back to initial take-off heading yaw unless pilot has already overridden yaw
-    if (auto_yaw.default_mode(true) != AUTO_YAW_HOLD) {
+    /*if (auto_yaw.default_mode(true) != AUTO_YAW_HOLD) {
         auto_yaw.set_mode(AUTO_YAW_RESETTOARMEDYAW);
     } else {
         auto_yaw.set_mode(AUTO_YAW_HOLD);
-    }
+    }*/
 }
 
 // rtl_climb_return_descent_run - implements the initial climb, return home and descent portions of RTL which all rely on the wp controller
